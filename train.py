@@ -12,6 +12,7 @@ from model import AudioCNN
 import torch.optim as optim
 from torch.optim.lr_scheduler import OneCycleLR
 from tqdm import tqdm
+import numpy as np
 
 app = modal.App("audio-cnn")
 
@@ -68,7 +69,22 @@ class ESC50Dataset(Dataset):
             spectrogram = waveform
         return spectrogram, row['label']
                 
+def mixup_data(x,y): #x is features and y is labels
+    lam = np.random.beta(0.2,0.2)
+    
+    batch_size = x.size(0)
+    index = torch.randperm(batch_size).to(x.device)
+    
+    # (0.7 * audio1) + (0.3 * audio2)
+    mixed_x = lam * x +(1-lam) * x[index, :]
+    y_a, y_b = y, y[index]
+    return mixed_x, y_a, y_b, lam
                 
+def mixup_criterion(criterion, pred, y_a, y_b, lam):
+    return lam * criterion(pred, y_a) 
+
+
+
                 
 @app.function(
     image=image,
@@ -141,7 +157,25 @@ def train():
         model.train()
         epoch_loss=0.0
         progress_bar = tqdm(train_loader, desc = f"Epoch{epoch+1}/{num_epochs}")
-        
+        for data, target in progress_bar:
+            data,target = data.to(device),target.to(device) 
+          
+            if np.random.random() > 0.7:
+                data, target_a, target_b, lam = mixup_data(data,target)
+                output = model(data)
+                loss = mixup_criterion(criterion, output, target_a, target_b, lam)
+                
+            else:
+                output = model(data)
+                loss = criterion(output,target)
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            scheduler.step()
+            
+            
+                
+            
 
 @app.local_entrypoint()
 def main():
