@@ -2,3 +2,5 @@ torchaudio
 pandas
 torch
 numpy
+tqdm
+tensorboard

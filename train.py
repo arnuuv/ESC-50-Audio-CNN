@@ -143,7 +143,7 @@ def train():
     val_dataset = ESC50Dataset(
         data_dir = esc50_dir,
         metadata_file = esc50_dir / "meta" / "esc50.csv",
-        split = 'val',
+        split = 'test',
         transform = val_transform)
 
     print("Training samples: ",len(train_dataset))
@@ -202,7 +202,7 @@ def train():
             for data,target in test_loader:
                 data,target = data.to(device),target.to(device)
                 outputs = model(data)
-                loss = criterion(data)
+                loss = criterion(outputs,target)
                 val_loss += loss.item()
                 _,predicted = torch.max(outputs.data,1) #diff percentage scores for models
                 total +=target.size(0)
