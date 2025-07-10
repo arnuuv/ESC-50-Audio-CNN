@@ -88,7 +88,7 @@ class AudioClassifier:
         spectrogram = spectrogram.to(self.device)
 
         with torch.no_grad():
-            output = self.model(spectrogram)
+            output,feature_maps = self.model(spectrogram, return_feature_maps = True)
 
             output = torch.nan_to_num(output)
             probabilities = torch.softmax(output, dim=1)
@@ -98,9 +98,19 @@ class AudioClassifier:
                            for prob, idx in zip(top3_probs, top3_indicies)]
 
             viz_data = {}
-            # The original code had feature_maps, but the model doesn't return them.
-            # This part of the code will now be removed.
-
+            for name,tensor in feature_maps.items():
+                if tensor.ndim == 4: # [batch_size, channels, height,width], this takes mean of every channel and makes a 2d heatmap basically
+                    aggregated_tensor = torch.mean(tensor,dim=1)
+                    squeezed_tensor = aggregated_tensor.squeeze(0)
+                    numpy_array = squeezed_tensor.cpu().numpy()
+                    clean_array = np.nan_to_num(numpy_array)
+                    viz_data[name] = {
+                        "shape": list(clean_array.shape),
+                        "values": clean_array.tolist()
+                    }
+                
+               
+                    
             spectrogram_np = spectrogram.squeeze(0).squeeze(0).cpu().numpy()
             clean_spectrogram = np.nan_to_num(spectrogram_np)
 
