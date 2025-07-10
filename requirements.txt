@@ -8,5 +8,4 @@ fastapi
 librosa
 pydantic
 soundfile
-base64
-io
+requests
