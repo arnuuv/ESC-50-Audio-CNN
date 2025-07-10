@@ -1,6 +1,6 @@
 import sys
 import modal
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset,DataLoader
 import pandas as pd
 from pathlib import Path
 import torchaudio
@@ -8,6 +8,10 @@ import torch
 import sys
 import torch.nn as nn
 import torchaudio.transforms as T
+from model import AudioCNN
+import torch.optim as optim
+from torch.optim.lr_scheduler import OneCycleLR
+from tqdm import tqdm
 
 app = modal.App("audio-cnn")
 
@@ -34,7 +38,7 @@ class ESC50Dataset(Dataset):
         self.data_dir = Path(data_dir)
         self.metadata = pd.read_csv(metadata_file)
         self.split = split
-        self.trasnform = transform
+        self.transform = transform
         
         if split =="train":
             self.metadata = self.metadata[self.metadata['fold'] != 5]
@@ -46,22 +50,23 @@ class ESC50Dataset(Dataset):
         self.metadata['label'] = self.metadata['category'].map(
             self.class_to_idx
         )
-        def __len__(self):
-            return len(self.metadata)
-         
-        def __getitem__(self,idx):
-            row = self.metadata.iloc[idx]
-            audio_path = self.data_dir / "audio"/ row['filename']
-            
-            waveform,sample_rate = torchaudio.load(audio_path)
-            
-            if waveform.shape[0]>1: #[channel,samples] [2,44000] [1,44000]
-                waveform = torch.mean(waveform,dim=0,keepdim=True)
-            if self.transform:
-                spectogram = self.transform(waveform)
-            else:
-                spectogram = waveform
-            return spectogram, row['label']
+    
+    def __len__(self):
+        return len(self.metadata)
+     
+    def __getitem__(self,idx):
+        row = self.metadata.iloc[idx]
+        audio_path = self.data_dir / "audio" / row['filename']
+        
+        waveform,sample_rate = torchaudio.load(audio_path)
+        
+        if waveform.shape[0]>1: #[channel,samples] [2,44000] [1,44000]
+            waveform = torch.mean(waveform,dim=0,keepdim=True)
+        if self.transform:
+            spectrogram = self.transform(waveform)
+        else:
+            spectrogram = waveform
+        return spectrogram, row['label']
                 
                 
                 
@@ -72,9 +77,9 @@ class ESC50Dataset(Dataset):
     timeout=60 * 60 * 3
 )
 def train():
-    esc50_dir = Path("/opt/esc-50-data")
+    esc50_dir = Path("/opt/esc50-data")
     train_transform = nn.Sequential(
-        T.MelSpectogram(
+        T.MelSpectrogram(
             sample_rate = 22050,
             n_fft = 1024,
             hop_length = 512,
@@ -90,7 +95,7 @@ def train():
         )
     
     val_transform = nn.Sequential(
-        T.MelSpectogram(
+        T.MelSpectrogram(
             sample_rate = 22050,
             n_fft = 1024,
             hop_length = 512,
@@ -114,6 +119,29 @@ def train():
         split = 'val',
         transform = val_transform)
 
+    print("Training samples: ",len(train_dataset))
+    print("Validation samples: ",len(val_dataset))
+    
+    train_loader = DataLoader(train_dataset, batch_size=32, shuffle = True)
+    test_loader = DataLoader(val_dataset, batch_size=32, shuffle = False)
+    
+    device = torch.device("cuda" if torch.cuda.is_available() else 'cpu')
+    model = AudioCNN(num_classes = len(train_dataset.classes))
+    model.to(device)
+    
+    num_epochs = 100
+    criterion = nn.CrossEntropyLoss(label_smoothing=0.1) # [1,0,0,0,0]
+    optimizer = optim.AdamW(model.parameters(),lr = 0.0005, weight_decay=0.01)
+    scheduler = OneCycleLR(optimizer, max_lr =0.002, epochs = num_epochs, steps_per_epoch = len(train_loader), pct_start = 0.1)
+    
+    best_accuracy = 0.0
+    
+    print("Starting training...")
+    for epoch in range(num_epochs):
+        model.train()
+        epoch_loss=0.0
+        progress_bar = tqdm(train_loader, desc = f"Epoch{epoch+1}/{num_epochs}")
+        
 
 @app.local_entrypoint()
 def main():
