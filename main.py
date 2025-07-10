@@ -80,9 +80,9 @@ class AudioClassifier:
         if audio_data.ndim > 1:
             audio_data = np.mean(audio_data, axis=1)
 
-        if sample_rate != 44100:
+        if sample_rate != 22050:
             audio_data = librosa.resample(
-                y=audio_data, orig_sr=sample_rate, target_sr=44100)
+                y=audio_data, orig_sr=sample_rate, target_sr=22050)
 
         spectrogram = self.audio_processor.process_audio_chunk(audio_data)
         spectrogram = spectrogram.to(self.device)
@@ -141,7 +141,7 @@ class AudioClassifier:
 
 @app.local_entrypoint()
 def main():
-    audio_data, sample_rate = sf.read("chirpingbirds.wav")
+    audio_data, sample_rate = sf.read("opening-soda-can.wav")
 
     buffer = io.BytesIO()
     sf.write(buffer, audio_data, sample_rate, format="WAV")
@@ -157,10 +157,10 @@ def main():
 
     waveform_info = result.get("waveform", {})
     if waveform_info:
-        values = waveform_info.get("values", {})
+        values = waveform_info.get('values', {})
         print(f"First 10 values: {[round(v, 4) for v in values[:10]]}...")
-        print(f"Duration: {waveform_info.get("duration", 0)}")
+        print(f"Duration: {waveform_info.get('duration', 0)}")
 
     print("Top predictions:")
     for pred in result.get("predictions", []):
-        print(f"  -{pred["class"]} {pred["confidence"]:0.2%}")
+        print(f"  -{pred['class']} {pred['confidence']:0.2%}")
