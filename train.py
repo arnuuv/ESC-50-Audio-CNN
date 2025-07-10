@@ -13,6 +13,7 @@ import torch.optim as optim
 from torch.optim.lr_scheduler import OneCycleLR
 from tqdm import tqdm
 import numpy as np
+from torch.utils.tensorboard import SummaryWriter
 
 app = modal.App("audio-cnn")
 
@@ -93,6 +94,16 @@ def mixup_criterion(criterion, pred, y_a, y_b, lam):
     timeout=60 * 60 * 3
 )
 def train():
+    from datetime import datetime
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_directory = f' models/tensorboard_logs/run_{timestamp}'
+    writer = SummaryWriter(log_dir = log_directory)
+    
+    
+    
+    
+    
+    
     esc50_dir = Path("/opt/esc50-data")
     train_transform = nn.Sequential(
         T.MelSpectrogram(
@@ -172,6 +183,56 @@ def train():
             loss.backward()
             optimizer.step()
             scheduler.step()
+            
+            epoch_loss += loss.item()
+            progress_bar.set_postfix({'Loss': f'{loss.item():4f}'})
+        avg_epoch_loss = epoch_loss / len(train_loader)
+        writer.add_scalar('Loss/train', avg_epoch_loss, epoch)
+        writer.add_scalar('Learning_rate', optimizer.param_groups[0]['lr'], epoch)
+        
+        
+        #this is for validation after every epoch
+        model.eval()
+        
+        correct = 0
+        total =0
+        val_loss = 0
+        
+        with torch.no_grad():
+            for data,target in test_loader:
+                data,target = data.to(device),target.to(device)
+                outputs = model(data)
+                loss = criterion(data)
+                val_loss += loss.item()
+                _,predicted = torch.max(outputs.data,1) #diff percentage scores for models
+                total +=target.size(0)
+                correct += (predicted == target).sum().item()
+                
+        accuracy =100 * correct / total
+        avg_val_loss = val_loss/len(test_loader)
+        
+        writer.add_scalar('Loss/Validation', avg_val_loss, epoch)
+        writer.add_scalar('Accuracy/Validation', accuracy, epoch)
+        
+        print(f'Epoch {epoch+1} Loss: {avg_epoch_loss:.4f} Validation Loss: {avg_val_loss:.4f} Accuracy: {accuracy:.2f}%')
+        if accuracy > best_accuracy:
+            best_accuracy = accuracy
+            torch.save({
+                    'model_state_dict':model.state_dict(),
+                    'accuracy':accuracy,
+                    'epoch':epoch,
+                    'classes': train_dataset.classes
+                },
+              "/models/best_models.pth")
+            
+            print(f'New best model saved with accuracy: {accuracy:.2f}%')
+    writer.close()
+    print(f"Training completed! Best accuracy: {best_accuracy:.2f}%")
+    
+           
+            
+            
+            
             
             
                 
