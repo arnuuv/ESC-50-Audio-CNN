@@ -2,6 +2,18 @@
 
 This project implements an audio classification CNN from scratch using PyTorch and torchaudio. It is designed to run both locally and on Modal for scalable inference and training.
 
+## Sample UI Screenshots
+
+Below are example screenshots of the CNN Audio Visualizer web UI:
+
+### Top Predictions, Spectrogram, and Waveform
+
+![UI showing top predictions, input spectrogram, and audio waveform](./audio-cnn-visualisation/sample-ui-1.jpg)
+
+### Convolutional Layer Outputs
+
+![UI showing convolutional layer outputs and feature maps](./audio-cnn-visualisation/sample-ui-2.jpg)
+
 ## Features
 
 - Residual CNN architecture for audio classification
@@ -64,5 +76,4 @@ Duration: 1.23
 
 ## Troubleshooting
 
-- If you get a `FileNotFoundError` for the model, ensure `best_models.pth` is in the correct location for your environment.
-- If you get a sample rate mismatch, ensure your audio is resampled to 22050 Hz.
+- If you get a `FileNotFoundError` for the model, ensure `best_models.pth`
