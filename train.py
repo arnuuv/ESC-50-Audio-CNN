@@ -71,7 +71,7 @@ class ESC50Dataset(Dataset):
         return spectrogram, row['label']
                 
 def mixup_data(x,y): #x is features and y is labels
-    lam = np.random.beta(0.2,0.2)
+    lam = np.random.beta(0.4,0.4)  # Changed from 0.2,0.2 for more aggressive mixing
     
     batch_size = x.size(0)
     index = torch.randperm(batch_size).to(x.device)
@@ -82,7 +82,7 @@ def mixup_data(x,y): #x is features and y is labels
     return mixed_x, y_a, y_b, lam
                 
 def mixup_criterion(criterion, pred, y_a, y_b, lam):
-    return lam * criterion(pred, y_a) 
+    return lam * criterion(pred, y_a) + (1 - lam) * criterion(pred, y_b)  # Improved mixup loss
 
 
 
@@ -170,6 +170,8 @@ def train():
     )
     
     best_accuracy = 0.0
+    patience = 15  # Early stopping patience
+    patience_counter = 0
     
     print("Starting training...")
     for epoch in range(num_epochs):
@@ -179,7 +181,7 @@ def train():
         for data, target in progress_bar:
             data,target = data.to(device),target.to(device) 
           
-            if np.random.random() > 0.7:
+            if np.random.random() > 0.6:  # Increased mixup probability
                 data, target_a, target_b, lam = mixup_data(data,target)
                 output = model(data)
                 loss = mixup_criterion(criterion, output, target_a, target_b, lam)
@@ -189,6 +191,10 @@ def train():
                 loss = criterion(output,target)
             optimizer.zero_grad()
             loss.backward()
+            
+            # Gradient clipping for stability
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            
             optimizer.step()
             scheduler.step()
             
@@ -223,8 +229,11 @@ def train():
         writer.add_scalar('Accuracy/Validation', accuracy, epoch)
         
         print(f'Epoch {epoch+1} Loss: {avg_epoch_loss:.4f} Validation Loss: {avg_val_loss:.4f} Accuracy: {accuracy:.2f}%')
+        
+        # Early stopping
         if accuracy > best_accuracy:
             best_accuracy = accuracy
+            patience_counter = 0
             torch.save({
                     'model_state_dict':model.state_dict(),
                     'accuracy':accuracy,
@@ -234,6 +243,12 @@ def train():
               "/models/best_models.pth")
             
             print(f'New best model saved with accuracy: {accuracy:.2f}%')
+        else:
+            patience_counter += 1
+            if patience_counter >= patience:
+                print(f'Early stopping triggered after {patience} epochs without improvement')
+                break
+                
     writer.close()
     print(f"Training completed! Best accuracy: {best_accuracy:.2f}%")
     

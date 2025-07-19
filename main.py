@@ -62,7 +62,7 @@ class AudioClassifier:
                                 map_location=self.device)
         self.classes = checkpoint['classes']
 
-        self.model = AudioCNN(num_classes=len(self.classes))
+        self.model = AudioCNN(num_classes=len(self.classes), use_se=True, use_fpn=True)
         self.model.load_state_dict(checkpoint['model_state_dict'])
         self.model.to(self.device)
         self.model.eval()
