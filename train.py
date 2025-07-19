@@ -115,10 +115,9 @@ def train():
             f_max = 11025
     ),
         T.AmplitudeToDB(),
-        T.FrequencyMasking(freq_mask_param = 30),
-        T.TimeMasking(time_mask_param = 80)
-        
-        
+        T.FrequencyMasking(freq_mask_param = 40),  # Increased from 30
+        T.TimeMasking(time_mask_param = 100),      # Increased from 80
+        T.SpecAugment(freq_mask_param=40, time_mask_param=100, num_masks=2)  # Additional augmentation
         )
     
     val_transform = nn.Sequential(
@@ -149,17 +148,26 @@ def train():
     print("Training samples: ",len(train_dataset))
     print("Validation samples: ",len(val_dataset))
     
-    train_loader = DataLoader(train_dataset, batch_size=32, shuffle = True)
-    test_loader = DataLoader(val_dataset, batch_size=32, shuffle = False)
+    train_loader = DataLoader(train_dataset, batch_size=24, shuffle = True, num_workers=2)  # Reduced batch size, added workers
+    test_loader = DataLoader(val_dataset, batch_size=24, shuffle = False, num_workers=2)
     
     device = torch.device("cuda" if torch.cuda.is_available() else 'cpu')
-    model = AudioCNN(num_classes = len(train_dataset.classes))
+    model = AudioCNN(num_classes = len(train_dataset.classes), use_se=True, use_fpn=True)  # Enable new features
     model.to(device)
     
-    num_epochs = 100
-    criterion = nn.CrossEntropyLoss(label_smoothing=0.1) # [1,0,0,0,0]
-    optimizer = optim.AdamW(model.parameters(),lr = 0.0005, weight_decay=0.01)
-    scheduler = OneCycleLR(optimizer, max_lr =0.002, epochs = num_epochs, steps_per_epoch = len(train_loader), pct_start = 0.1)
+    num_epochs = 150  # Increased epochs
+    criterion = nn.CrossEntropyLoss(label_smoothing=0.15)  # Increased label smoothing
+    optimizer = optim.AdamW(model.parameters(), lr=0.0003, weight_decay=0.02)  # Adjusted hyperparameters
+    
+    # Improved learning rate scheduling
+    scheduler = OneCycleLR(
+        optimizer, 
+        max_lr=0.0015,  # Reduced max LR
+        epochs=num_epochs, 
+        steps_per_epoch=len(train_loader), 
+        pct_start=0.15,  # Longer warmup
+        anneal_strategy='cos'  # Cosine annealing
+    )
     
     best_accuracy = 0.0
     
